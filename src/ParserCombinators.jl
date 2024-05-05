@@ -1,5 +1,6 @@
 module ParserCombinators
 
+# Types
 struct Error
     message::String
 end
@@ -9,138 +10,68 @@ struct ParseResult
     rest::String
 end
 
-# make input an iterable with an end type to dispatch on?
-
-function parser(x)
+# Parser
+parser(x) =
     function (input::String)
         parser(x, input)
     end
-end
-
 parser(char::Char, input) =
     if input[1] == char
-        ParseResult(char, rest)
+        ParseResult(char, input[2:end])
     else
         Error("expected $char at $input")
     end
 
-
-function then(p1, p2)
+# Base
+then(p1, p2) =
     function (input::String)
         then(p1, p2, input)
     end
-end
 then(p1, p2, input::String) = then(p1(input), p2)
 then(p1::ParseResult, p2) = then(p1, p2(p1.rest))
+then(p1::ParseResult, p2::ParseResult) = ParseResult(vcat(p1.parsed, p2.parsed), p2.rest)
 then(e1::Error, _p2) = e1
-then(p1::ParseResult, p2::ParseResult) = ParseResult(string(p1.parsed, p2.parsed), p2.rest)
 then(_p1::ParseResult, e2::Error) = e2
 
-#function then(parser1, parser2)
-#    function (input::String)
-#        res = parser1(input)
-#
-#        if isnothing(res)
-#            nothing
-#        else
-#            (parsed1, rest1) = res
-#
-#            res2 = parser2(rest1)
-#            if isnothing(res2)
-#                nothing
-#            else
-#                (parsed2, rest2) = res2
-#                (string(parsed1, parsed2), rest2)
-#            end
-#        end
-#    end
-#end
 
-function or(parser1, parser2)
+or(p1, p2) =
     function (input::String)
-        res = parser1(input)
-
-        if isnothing(res)
-            parser2(input)
-        else
-            (parsed1, rest1) = res
-            (parsed1, rest1)
-        end
+        or(p1, p2, input)
     end
-end
+or(p1, p2, input::String) = or(p1(input), p2(input))
+or(p1::ParseResult, _p2) = p1
+or(_e1::Error, p2::ParseResult) = p2
+or(_e1::Error, e2::Error) = e2
 
-function drop_first(parser1, parser2)
+map(f, p) =
     function (input::String)
-        res = parser1(input)
-
-        if isnothing(res)
-            nothing
-        else
-            (_parsed1, rest1) = res
-            parser2(rest1)
-        end
+        map(f, p, input)
     end
-end
+map(f, p, input) = map(f, p(input))
+map(f, p::ParseResult) = ParseResult(f(p.parsed), p.rest)
+map(f, e::Error) = e
 
-function map(func, parser)
+empty() =
     function (input::String)
-        res = parser(input)
-
-        if isnothing(res)
-            nothing
-        else
-            (parsed1, rest1) = res
-            (func(parsed1), rest1)
-        end
-    end
-end
-
-
-# Derived combinators
-function one_of(parsers)
-    foldl(or, parsers)
-end
-
-function sequence(parsers)
-    foldl(then, parsers)
-end
-
-function many(parser)
-
-    function many_rec(parser, input, output)
-        res = parser(input)
-
-        if isnothing(res)
-            (output, input)
-        else
-            (parsed, rest) = res
-            many_rec(parser, rest, string(output, parsed))
-        end
+        ParseResult([], input)
     end
 
+# Derived
+one_of(ps) = foldl(or, ps)
+
+sequence(ps) = foldl(then, ps)
+
+optional(p) = or(p, empty())
+
+many(p) =
     function (input::String)
-        many_rec(parser, input, "")
+        many(p, empty()(input), input)
     end
-end
+many(p, output::ParseResult, input::String) = many(p, output, p(input))
+many(p, output::ParseResult, x::ParseResult) = many(p, then(output, x), p(x.rest))
+many(p, output::ParseResult, _x::Error) = output
 
-function some(parser)
-    then(parser, many(parser))
-end
+some(p) = then(p, many(p))
 
-
-# Parsers
-#function char_parser(char::Char)
-#    function (input::String)
-#        if input[1] == char
-#            (char, input[2:end])
-#        else
-#            nothing
-#        end
-#    end
-#end
-
-function char_range_parsers(a, b)
-    Base.map(ParserCombinators.char_parser, a:b)
-end
 
 end

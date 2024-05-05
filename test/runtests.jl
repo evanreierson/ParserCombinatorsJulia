@@ -1,6 +1,11 @@
 using ParserCombinators
 using Test
 
+@testset "then combinator" begin
+
+end
+
+
 @testset "Parse nested Vector with various data types" begin
     input = "[234, 453.34, 'hello', [ [ 1, 2 ], 5.0 , 6 ], 'world' ]"
     expected = [234, 453.34, "hello", [[1, 2], 5.0, 6], "world"]
