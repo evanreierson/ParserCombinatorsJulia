@@ -6,20 +6,25 @@ using Test
     expected = [234, 453.34, "hello", [[1, 2], 5.0, 6], "world"]
 
 
-    digit_parsers = Base.map(ParserCombinators.char_parser, '0':'9')
-    digit = ParserCombinators.one_of(digit_parsers)
+    digit = ParserCombinators.one_of(ParserCombinators.char_range_parsers('0', '9'))
 
     numbers = ParserCombinators.some(digit)
 
     int = ParserCombinators.map(p -> parse(Int64, p), numbers)
 
     dot = ParserCombinators.char_parser('.')
-    # exception on int :thinking:
+
     float = ParserCombinators.map(p -> parse(Float64, p), ParserCombinators.then(ParserCombinators.then(numbers, dot), numbers))
 
     number = ParserCombinators.or(float, int)
 
+    upper = ParserCombinators.one_of(ParserCombinators.char_range_parsers('A', 'Z'))
 
+    lower = ParserCombinators.one_of(ParserCombinators.char_range_parsers('a', 'z'))
+
+    alphanumeric = ParserCombinators.one_of([digit, upper, lower])
+
+    word = ParserCombinators.some(alphanumeric)
 
 end
 
