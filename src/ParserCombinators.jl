@@ -1,7 +1,8 @@
 module ParserCombinators
+export recognizer, recognizers, then, or, apply, ϵ, oneof, sequence, optional, many, some, ParseResult, ParseError
 
-# Types
-struct Error
+# Result types
+struct ParseError
     message::String
 end
 
@@ -9,20 +10,29 @@ struct ParseResult
     parsed
     rest::String
 end
+Base.:(==)(a::ParseResult, b::ParseResult) = (a.parsed == b.parsed) && (a.rest == b.rest)
+Base.isequal(a::ParseResult, b::ParseResult) = Base.isequal(a.parsed, b.parsed) && Base.isequal(a.rest, b.rest)
+Base.hash(a::ParseResult, h::UInt) = Base.hash((a.parsed, a.rest), h)
 
-# Parser
-parser(x) =
+# Terminal recognizers 
+recognizer(a) =
     function (input::String)
-        parser(x, input)
+        recognizer(a, input)
     end
-parser(char::Char, input) =
-    if input[1] == char
+recognizer(char::Char, input) =
+    if isempty(input)
+        ParseError("End of input")
+    elseif input[1] == char
         ParseResult(char, input[2:end])
     else
-        Error("expected $char at $input")
+        ParseError("expected $char at $input")
     end
 
-# Base
+recognizers(xs) = Base.map(recognizer, xs)
+
+
+
+# Base combinators
 then(p1, p2) =
     function (input::String)
         then(p1, p2, input)
@@ -30,8 +40,8 @@ then(p1, p2) =
 then(p1, p2, input::String) = then(p1(input), p2)
 then(p1::ParseResult, p2) = then(p1, p2(p1.rest))
 then(p1::ParseResult, p2::ParseResult) = ParseResult(vcat(p1.parsed, p2.parsed), p2.rest)
-then(e1::Error, _p2) = e1
-then(_p1::ParseResult, e2::Error) = e2
+then(e1::ParseError, _p2) = e1
+then(_p1::ParseResult, e2::ParseError) = e2
 
 
 or(p1, p2) =
@@ -40,38 +50,37 @@ or(p1, p2) =
     end
 or(p1, p2, input::String) = or(p1(input), p2(input))
 or(p1::ParseResult, _p2) = p1
-or(_e1::Error, p2::ParseResult) = p2
-or(_e1::Error, e2::Error) = e2
+or(_e1::ParseError, p2::ParseResult) = p2
+or(_e1::ParseError, e2::ParseError) = e2
 
-map(f, p) =
+apply(f, p) =
     function (input::String)
-        map(f, p, input)
+        apply(f, p, input)
     end
-map(f, p, input) = map(f, p(input))
-map(f, p::ParseResult) = ParseResult(f(p.parsed), p.rest)
-map(f, e::Error) = e
+apply(f, p, input) = apply(f, p(input))
+apply(f, p::ParseResult) = ParseResult(f(p.parsed), p.rest)
+apply(f, e::ParseError) = e
 
-empty() =
+ϵ() =
     function (input::String)
         ParseResult([], input)
     end
 
-# Derived
-one_of(ps) = foldl(or, ps)
+# Derived combinators
+oneof(ps) = foldl(or, ps)
 
 sequence(ps) = foldl(then, ps)
 
-optional(p) = or(p, empty())
+optional(p) = or(p, ϵ())
 
 many(p) =
     function (input::String)
-        many(p, empty()(input), input)
+        many(p, ϵ()(input), input)
     end
 many(p, output::ParseResult, input::String) = many(p, output, p(input))
 many(p, output::ParseResult, x::ParseResult) = many(p, then(output, x), p(x.rest))
-many(p, output::ParseResult, _x::Error) = output
+many(p, output::ParseResult, _x::ParseError) = output
 
 some(p) = then(p, many(p))
-
 
 end
