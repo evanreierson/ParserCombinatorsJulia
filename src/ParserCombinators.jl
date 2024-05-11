@@ -1,5 +1,5 @@
 module ParserCombinators
-export recognizer, recognizers, then, or, apply, ϵ, oneof, sequence, optional, many, some, ParseResult, ParseError
+export recognizer, recognizers, then, or, apply, ϵ, oneof, sequence, optional, many, some, keepfirst, keepsecond, keepmiddle, ParseResult, ParseError
 
 # Result types
 struct ParseError
@@ -33,6 +33,11 @@ recognizers(xs) = Base.map(recognizer, xs)
 
 
 # Base combinators
+ϵ() =
+    function (input::String)
+        ParseResult("", input)
+    end
+
 then(p1, p2) =
     function (input::String)
         then(p1, p2, input)
@@ -42,7 +47,6 @@ then(p1::ParseResult, p2) = then(p1, p2(p1.rest))
 then(p1::ParseResult, p2::ParseResult) = ParseResult(vcat(p1.parsed, p2.parsed), p2.rest)
 then(e1::ParseError, _p2) = e1
 then(_p1::ParseResult, e2::ParseError) = e2
-
 
 or(p1, p2) =
     function (input::String)
@@ -61,10 +65,14 @@ apply(f, p, input) = apply(f, p(input))
 apply(f, p::ParseResult) = ParseResult(f(p.parsed), p.rest)
 apply(f, e::ParseError) = e
 
-ϵ() =
+many(p) =
     function (input::String)
-        ParseResult([], input)
+        emptylist = apply(_ -> [], ϵ()(input))
+        many(p, emptylist, input)
     end
+many(p, output::ParseResult, input::String) = many(p, output, p(input))
+many(p, output::ParseResult, x::ParseResult) = many(p, then(output, x), p(x.rest))
+many(p, output::ParseResult, _x::ParseError) = output
 
 # Derived combinators
 oneof(ps) = foldl(or, ps)
@@ -73,14 +81,12 @@ sequence(ps) = foldl(then, ps)
 
 optional(p) = or(p, ϵ())
 
-many(p) =
-    function (input::String)
-        many(p, ϵ()(input), input)
-    end
-many(p, output::ParseResult, input::String) = many(p, output, p(input))
-many(p, output::ParseResult, x::ParseResult) = many(p, then(output, x), p(x.rest))
-many(p, output::ParseResult, _x::ParseError) = output
-
 some(p) = then(p, many(p))
+
+keepfirst(p1, p2) = apply(p -> p[1], then(p1, p2))
+
+keepsecond(p1, p2) = apply(p -> p[2], then(p1, p2))
+
+keepmiddle(p1, p2, p3) = keepfirst(keepsecond(p1, p2), p3)
 
 end

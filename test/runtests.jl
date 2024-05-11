@@ -21,8 +21,8 @@ using Test
 end
 
 @testset "then combinator" begin
-    a = parser('a')
-    b = parser('b')
+    a = recognizer('a')
+    b = recognizer('b')
     ab = then(a, b)
 
     @test ab("ab") == ParseResult(['a', 'b'], "")
@@ -34,8 +34,8 @@ end
 end
 
 @testset "or combinator" begin
-    a = parser('a')
-    b = parser('b')
+    a = recognizer('a')
+    b = recognizer('b')
     aorb = or(a, b)
 
     @test aorb("abc") == ParseResult('a', "bc")
@@ -46,7 +46,7 @@ end
 end
 
 @testset "apply combinator" begin
-    one = parser('1')
+    one = recognizer('1')
     int = apply(p -> parse(Int64, p), one)
 
     @test int("1ab") == ParseResult(1, "ab")
@@ -58,9 +58,9 @@ end
 @testset "ϵ (empty) combinator" begin
     e = ϵ()
 
-    @test e("abc") == ParseResult([], "abc")
+    @test e("abc") == ParseResult("", "abc")
 
-    @test e("") == ParseResult([], "")
+    @test e("") == ParseResult("", "")
 end
 
 @testset "oneof combinator" begin
@@ -87,8 +87,8 @@ end
     maybe_a = optional(recognizer('a'))
 
     @test maybe_a("abc") == ParseResult('a', "bc")
-    @test maybe_a("bac") == ParseResult([], "bac")
-    @test maybe_a("") == ParseResult([], "")
+    @test maybe_a("bac") == ParseResult("", "bac")
+    @test maybe_a("") == ParseResult("", "")
 end
 
 @testset "many combinator" begin
@@ -111,8 +111,9 @@ end
 
 
 @testset "Parse whitespace-separated list of numbers" begin
-    input = """ 2344 23454.34
-    45.67  5  3"""
+    input = """
+    2344 23454.34
+    45.67  5  3  """
 
     expected = [2344, 23454.34, 45.67, 5, 3]
 
@@ -123,23 +124,29 @@ end
     float = apply(p -> parse(Float64, join(p)), sequence([digits, dot, digits]))
     number = or(float, int)
 
-    whitespace = some(oneof(recognizers([' ', '\t', '\n'])))
+    whitespace = optional(some(oneof(recognizers([' ', '\t', '\n']))))
 
-    element = apply(p -> p[1], then(number, optional(whitespace)))
+    element = keepmiddle(whitespace, number, whitespace)
 
-    numbers = then(optional(whitespace), many(element))
+    numberlist = many(element)
 
-    @test numbers(input) == ParseResult(expected, "")
-
-    # how to drop first with vcat and empty as []
+    @test numberlist(input) == ParseResult(expected, "")
 end
 
-#@testset "Parse nested vector" begin
-#    input = "[1, 2, [[3], 4]]"
-#    expected = [1, 2, [[3], 4]]
-#
-#    # TODO
-#end
+@testset "Parse nested vector" begin
+    input = "[[],[[],[[]],[]],[]]"
+    expected = [[], [[], [[]], []], []]
+
+
+    # TODO figure out mutually recursive definition
+    openbracket = recognizer('[')
+    closebracket = recognizer(']')
+    comma = recognizer(',')
+    listitem = keepmiddle(comma, listitem(), comma)
+    list = (then(openbracket, many(listitem)), closebracket)
+
+    list(input)
+end
 #
 #
 #@testset "Parse to struct" begin
