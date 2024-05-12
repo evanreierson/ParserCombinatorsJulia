@@ -109,6 +109,42 @@ end
     @test isa(as("bc"), ParseError)
 end
 
+@testset "keepfirst combinator" begin
+    a = recognizer('a')
+    b = recognizer('b')
+
+    a_ = keepfirst(a, b)
+
+    @test a_("abc") == ParseResult('a', "c")
+
+    @test isa(a_(""), ParseError)
+    @test isa(a_("bac"), ParseError)
+end
+
+@testset "keepsecond combinator" begin
+    a = recognizer('a')
+    b = recognizer('b')
+
+    _b = keepsecond(a, b)
+
+    @test _b("abc") == ParseResult('b', "c")
+
+    @test isa(_b(""), ParseError)
+    @test isa(_b("bac"), ParseError)
+end
+
+@testset "keepmiddle combinator" begin
+    a = recognizer('a')
+    b = recognizer('b')
+    c = recognizer('c')
+
+    _b_ = keepmiddle(a, b, c)
+
+    @test _b_("abcd") == ParseResult('b', "d")
+
+    @test isa(_b_(""), ParseError)
+    @test isa(_b_("bac"), ParseError)
+end
 
 @testset "Parse whitespace-separated list of numbers" begin
     input = """
@@ -138,26 +174,44 @@ end
     expected = [[], [[], [[]], []], []]
 
 
-    # TODO figure out mutually recursive definition
+    # TODO figure out mutually recursive definitions
     openbracket = recognizer('[')
     closebracket = recognizer(']')
+    unitlist = then(openbracket, closebracket)
     comma = recognizer(',')
-    listitem = keepmiddle(comma, listitem(), comma)
+
+    listitem = keepmiddle(comma, or(list, unitlist), comma)
     list = (then(openbracket, many(listitem)), closebracket)
 
     list(input)
 end
-#
-#
-#@testset "Parse to struct" begin
-#    input = "(1 2) (30 40) (500 600)"
-#
-#    struct Point
-#        x::Int
-#        y::Int
-#    end
-#
-#    expected = [Point(1, 2), Point(30, 40), Point(x=500, y=600)]
-#
-#    # TODO
-#end
+
+
+@testset "Parse to struct" begin
+    struct Point
+        x::Int
+        y::Int
+    end
+
+    input = "(1 2) (30 40) (500 600)"
+    expected = [Point(1, 2), Point(30, 40), Point(500, 600)]
+
+    openparen = recognizer('(')
+    closeparen = recognizer(')')
+    space = recognizer(' ')
+
+    digit = oneof(recognizers('0':'9'))
+    digits = some(digit)
+    int = apply(p -> parse(Int64, join(p)), digits)
+
+    pair = sequence([openparen, int, space, int, closeparen, optional(space)])
+    point = apply(p -> Point(p[2], p[4]), pair)
+
+    pointlist = some(point)
+
+
+    @test pointlist(input) == ParseResult(expected, "")
+
+    @test isa(pointlist("(4, hello)"), ParseError)
+    @test isa(pointlist(""), ParseError)
+end

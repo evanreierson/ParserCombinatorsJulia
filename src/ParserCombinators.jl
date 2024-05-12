@@ -31,7 +31,6 @@ recognizer(char::Char, input) =
 recognizers(xs) = Base.map(recognizer, xs)
 
 
-
 # Base combinators
 ϵ() =
     function (input::String)
