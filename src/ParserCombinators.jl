@@ -7,7 +7,7 @@ export recognizer, recognizers, then, or, apply, ϵ, oneof, sequence, optional, 
 A struct representing a parsing error with a message.
     
 In the future, this could store additional data such as current parser,
-position, and remaing input.
+position, and remaining input.
 """
 struct ParseError
     message::String
